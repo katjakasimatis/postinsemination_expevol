@@ -1,6 +1,4 @@
 #upload libraries
-library(plyr)
-library(valr)
 library(dplyr)
 library(tidyverse)
 library(multcomp)
@@ -8,7 +6,7 @@ library(emmeans)
 
 
 #load the raw data
-data <- read.csv("kasimatis_genomics_merged_allelicdepth.txt", header = TRUE, sep = "\t")
+data <- read.table("kasimatis_genomics_merged_allelicdepth.txt", header = TRUE, sep = "\t")
 
 #remove repetitive regions
 bed <- read.table("repeats.bed", header = FALSE)
