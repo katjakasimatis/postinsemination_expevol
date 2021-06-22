@@ -1,5 +1,68 @@
-#load data
-data.filtered <- read.table("kasimatis_genomicdata_filtered.txt", header = TRUE, sep = "\t")
+#upload libraries
+library(tidyverse)
+
+#load the raw data
+data <- read.csv("kasimatis_genomics_merged_allelicdepth.txt", header = TRUE, sep = "\t")
+
+#remove repetitive regions
+bed <- read.table("Desktop/repeats.bed", header = FALSE)
+names(bed) <- c("chrom", "start", "end")
+bed <- as_tibble(bed)
+
+data$chrom <- data$CHROM
+data$start <- data$POS - 1
+data$end   <- data$POS
+data2 <- as_tibble(data)
+
+data.masked <- as.data.frame(bed_subtract(data2, bed))
+data.masked <- data.masked[, 1:77]
+
+expevol <- c();
+for(i in 5:ncol(data.masked)){
+  expevol <- rbind(expevol, data.frame(CHR = as.character(data.masked$CHROM),
+                                       POS = as.numeric(as.character(data.masked$POS)),
+                                       REFALLELE = as.character(data.masked$REF),
+                                       ALTALLELE = as.character(data.masked$ALT),
+                                       ALL = as.character(data.masked[,i]),
+                                       sample = colnames(data.masked)[i]));
+}
+
+expevol <- expevol[!grepl("/", expevol$ALL), ]
+expevol <- expevol[expevol$REFALLELE %in% c("A","T","G","C") & expevol$ALTALLELE %in% c("A","T","G","C"), ]
+
+expevol$REF <- gsub(",[0-9]+", "", perl=T, expevol$ALL)
+expevol$ALT <- gsub("[0-9]+,", "", perl=T, expevol$ALL)
+expevol$SNP <- paste(expevol$CHR, expevol$POS, expevol$REFALLELE, expevol$ALTALLELE, sep="_")
+
+expevol$regime <- substr(expevol$sample, start = 5, stop = 6)
+#LA = within strain pre- and post (WS-P&P)
+#SO = within strain post only (WS-PO)
+#CO = between strain pre- and post (BS-P&P)
+#SC = between strain post only (BS-PO)
+
+expevol$time <- substr(expevol$sample, start = 8, stop = 9)
+expevol$time <- as.character(expevol$time)
+expevol$time[expevol$time=="s0"]   <- "0"
+expevol$time[expevol$time=="s4"]   <- "13"
+expevol$time[expevol$time=="s7"]   <- "22"
+expevol$time[expevol$time=="s1"]   <- "31"
+expevol$time <- as.numeric(expevol$time)
+#0 = generation 0 (i.e., ancestor)
+#13 = generation 13 (i.e., after selective event 4)
+#s7 = generation 22 (i.e., after selective event 7)
+#s10 = generation 31 (i.e., evolved)
+
+
+#estimate the coverage
+expevol$REF <- as.numeric(as.character(expevol$REF))
+expevol$ALT <- as.numeric(as.character(expevol$ALT))
+expevol$coverage <- expevol$REF + expevol$ALT
+
+
+#filter the data: keep SNPs with at least 20x coverage but less than 281x coverage (i.e., remove top 5%)
+data.filtered  <- expevol[expevol$coverage >= 20, ]
+data.filtered  <- data.filtered[data.filtered$coverage < 281, ]
+data.filtered  <- data.filtered[complete.cases(data.filtered[ ,c(7,8)]), ]
 
 data.filtered$line <- substr(data.filtered$sample, start = 1, stop = 6)
 
