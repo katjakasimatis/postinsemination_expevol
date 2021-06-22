@@ -11,7 +11,7 @@ library(emmeans)
 data <- read.csv("kasimatis_genomics_merged_allelicdepth.txt", header = TRUE, sep = "\t")
 
 #remove repetitive regions
-bed <- read.table("Desktop/repeats.bed", header = FALSE)
+bed <- read.table("repeats.bed", header = FALSE)
 names(bed) <- c("chrom", "start", "end")
 bed <- as_tibble(bed)
 
