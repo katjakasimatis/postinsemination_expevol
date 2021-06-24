@@ -6,7 +6,7 @@ library(emmeans)
 
 
 #load the raw data
-data <- read.table("kasimatis_genomics_merged_allelicdepth.txt", header = TRUE, sep = "\t")
+data <- read.table("2020.05.25_expevol_genomics_merged_allelicdepth.txt", header = TRUE, sep = "\t")
 
 #remove repetitive regions
 bed <- read.table("repeats.bed", header = FALSE)
