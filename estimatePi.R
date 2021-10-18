@@ -88,23 +88,6 @@ for (i in 1:length(ancestor$SNP)){
 polymorphic <- subset(anc.pi, pi != 0)
 
 
-#remove repetitive regions
-bed <- read.table("repeats.bed", header = FALSE)
-names(bed) <- c("chrom", "start", "end")
-bed <- subset(bed, chrom != "MtDNA")
-bed <- as_tibble(bed)
-
-anc.pi$chrom <- anc.pi$CHR
-anc.pi$start <- anc.pi$POS - 1
-anc.pi$end   <- anc.pi$POS
-anc.pi2 <- as_tibble(anc.pi)
-
-anc.pi.masked <- as.data.frame(bed_subtract(anc.pi2, bed))
-anc.pi.masked <- anc.pi.masked[, 1:4]
-
-polymorphic.masked <- subset(anc.pi.masked, pi != 0)
-
-
 #calculate Watterson's theta
 #define 1Kb windows for each chromosome
 chrI  <- seq(0, 15069000, by = 1000)  #(length 15,069 windows)
@@ -120,7 +103,7 @@ slide_theta <- c();
 for (i in 2:length(chrI)){
   #print(i);
   
-  A <- subset(ancestor, POS >= chrI[i] - 10000 & POS < chrI[i] & CHR == "I")
+  A <- subset(ancestor, POS >= chrI[i] - 1000 & POS < chrI[i] & CHR == "I")
   out <- data.frame(CHR    = A$CHR[1],
                     domain = A$domain[1],
                     nSNPs  = length(A$SNP))
