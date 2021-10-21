@@ -19,10 +19,10 @@ sc.genomic <- subset(sc, CHR != "MtDNA")
 
 
 #Bonferronfi cut-off
-la.bonf <- 1 / (0.5 * length(la.genomic$SNP))
-co.bonf <- 1 / (0.5 * length(co.genomic$SNP))
-so.bonf <- 1 / (0.5 * length(so.genomic$SNP))
-sc.bonf <- 1 / (0.5 * length(sc.genomic$SNP)) 
+la.bonf <- 0.05 / length(la.genomic$SNP)
+co.bonf <- 0.05 / length(co.genomic$SNP)
+so.bonf <- 0.05 / length(so.genomic$SNP)
+sc.bonf <- 0.05 / length(sc.genomic$SNP) 
 
 
 #define significance peaks: at least 5 significant SNPs within a 1kb window
