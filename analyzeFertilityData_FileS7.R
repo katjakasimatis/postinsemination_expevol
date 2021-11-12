@@ -8,6 +8,9 @@ library(cowplot)
 
 data <- read.csv("FileS7_FertilityData.csv", header = TRUE)
 
+data$regime <- substr(data$line, start = 5, stop = 6)
+data$regime[data$regime==""] <- "anc"
+
 newdata <- as.data.frame(summarise(group_by(data, line, replicate, treatment), sum(total), sum(rfp.minus)))
 names(newdata) <- c("line", "replicate", "treatment", "sum_total", "sum_rfp.minus")
 newdata <- subset(newdata, replicate!="rep4")
