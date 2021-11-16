@@ -1,5 +1,6 @@
 #upload libraries
 library(tidyverse)
+library(poolSeq)
 
 #load the raw data
 data <- read.csv("kasimatis_genomics_merged_allelicdepth.txt", header = TRUE, sep = "\t")
@@ -66,58 +67,88 @@ data.filtered  <- data.filtered[complete.cases(data.filtered[ ,c(7,8)]), ]
 
 data.filtered$line <- substr(data.filtered$sample, start = 1, stop = 6)
 
-data.filtered$CHR[data.filtered$CHR=="I"]   <- "1"
-data.filtered$CHR[data.filtered$CHR=="II"]  <- "2"
-data.filtered$CHR[data.filtered$CHR=="III"] <- "3"
-data.filtered$CHR[data.filtered$CHR=="IV"]  <- "4"
-data.filtered$CHR[data.filtered$CHR=="V"]   <- "5"
-data.filtered$CHR[data.filtered$CHR=="X"]   <- "6"
+#create a dataframe of SNPs common to all samples
+anc.evo <- subset(data.filtered, time == 0 | time == 31)
+commonSNP <- c();
+for (i in 1:length(levels(as.factor(anc.evo$SNP)))) {
+  print(i)
+  A <- anc.evo[anc.evo$SNP == levels(as.factor(anc.evo$SNP))[i], ]
+  B <- length(A$CHR) == 25
+  if(B == TRUE) {
+    commonSNP <- rbind(commonSNP, A)
+  }
+}
 
+commonSNP$CHR[commonSNP$CHR=="I"]   <- "1"
+commonSNP$CHR[commonSNP$CHR=="II"]  <- "2"
+commonSNP$CHR[commonSNP$CHR=="III"] <- "3"
+commonSNP$CHR[commonSNP$CHR=="IV"]  <- "4"
+commonSNP$CHR[commonSNP$CHR=="V"]   <- "5"
+commonSNP$CHR[commonSNP$CHR=="X"]   <- "6"
 
 #create a dataframe for the population at generation 0 (i.e., ancestor) and keep only SNPs where both reference AND alternate alleles have coverage in nuclear genome
-anc <- subset(data.filtered, line == "ANC_AA" & REF != 0 & ALT != 0 & CHR != "MtDNA", select = c("SNP", "CHR", "REF", "ALT", "coverage"))
+anc <- subset(commonSNP, line == "ANC_AA" & REF != 0 & ALT != 0 & CHR != "MtDNA", select = c("SNP", "CHR", "REF", "ALT", "coverage"))
 names(anc) <- c("SNP", "CHR", "anc.ref", "anc.alt", "anc.coverage")
 
 
-#create a dataframe for each of the replicate populations at generation 31 (i.e., evolved) and keep only SNPs where both reference AND alternate alleles have coverage in nuclear genome
-A_3_CO <- subset(data.filtered, line == "A_3_CO" & REF != 0 & ALT !=0 & time==31 & CHR != "MtDNA", select = c("SNP", "REF", "ALT", "coverage"))
-names(A_3_CO) <- c("SNP", "evo.ref", "evo.alt", "evo.coverage")
-
-#merge ancestor and evolved replicate by SNP
-merged <- merge(anc, A_3_CO, by.x = "SNP", by.y = "SNP")
-
-
-#calculate Ne based on Waples 1989
+#calculate Ne per chromosome based on Waples 1989
 #Plan II: the initial sample and individuals contributing to the next generation are independent binomial samples (i.e., remove individuals before they contribute to next generation)
-
-estimateNeWII <- function(p0, pt, cov0, covt, gen, ploidy){
-    
-  A <- ((p0/cov0 - pt/covt)^2) / ((0.5 * (p0/cov0 + pt/covt)) - (p0/cov0 * pt/covt))
-  
-  B <- (1/length(cov0)) * sum(A - ((1/cov0) + (1/covt)))
-  
-  NeWII <- -gen / (ploidy * log(1 - B))
-  return(NeWII)
-}
-
-estimateNeWII(p0 = merged$anc.ref, pt = merged$evo.ref, cov0 = merged$anc.coverage, covt = merged$evo.coverage, gen = 30, ploidy = 2)
-
-
 by.chromosome = matrix(nrow = 24, ncol = 7);
 for (i in 1:24){
   name <- c("A_1_LA", "A_2_LA", "A_3_LA", "B_1_LA", "B_2_LA", "B_3_LA", "A_1_SO", "A_2_SO", "A_3_SO", "B_1_SO", "B_2_SO", "B_3_SO", "A_1_CO", "A_2_CO", "A_3_CO", "B_1_CO", 
             "B_2_CO", "B_3_CO", "A_1_SC", "A_2_SC", "A_3_SC", "B_1_SC", "B_2_SC", "B_3_SC")
   
-  A <- subset(data.filtered, line == name[i] & REF != 0 & ALT !=0 & time==31 & CHR != "MtDNA", select = c("SNP", "REF", "ALT", "coverage"))
+  A <- subset(commonSNP, line == name[i] & REF != 0 & ALT !=0 & time==31 & CHR != "MtDNA", select = c("SNP", "REF", "ALT", "coverage"))
   names(A) <- c("SNP", "evo.ref", "evo.alt", "evo.coverage")
   
   B <- merge(anc, A, by.x = "SNP", by.y = "SNP")
   
   for (j in 1:6){
-    Ne <- estimateNeWII(p0 = subset(B, CHR==(j))$anc.ref, pt = subset(B, CHR==(j))$evo.ref, cov0 = subset(B, CHR==(j))$anc.coverage, covt = subset(B, CHR==(j))$evo.coverage, 
-                        gen = 30, ploidy = 2)
+    p0 <- subset(B, CHR == j)$anc.ref / (subset(B, CHR == j)$anc.ref + subset(B, CHR == j)$anc.alt)
+    pt <- subset(B, CHR == j)$evo.ref / (subset(B, CHR == j)$evo.ref + subset(B, CHR == j)$evo.alt)
     
-    by.chromosome[i, j+1] <- Ne
+    cov0 <- subset(B, CHR == j)$anc.coverage
+    covt <- subset(B, CHR == j)$evo.coverage
+    
+    Ne <- estimateNe(p0 = p0, pt = pt, cov0 = cov0, covt = covt, t = 30, ploidy = 2, truncAF = NA, method = c("W.planII"), Ncensus = 5000, poolSize = rep(2500, 2))
+    Ne <- as.matrix(Ne)
+    by.chromosome[i, j+1] <- Ne[1]
+  }
+ 
+  by.chromosome[i, 1] <- name[i]
+}
+
+by.chromosome <- as.data.frame(by.chromosome)
+names(by.chromosome) <- c("line", "I", "II", "III", "IV", "V", "X")
+by.chromosome$I   <- as.numeric(by.chromosome$I)
+by.chromosome$II  <- as.numeric(by.chromosome$II)
+by.chromosome$III <- as.numeric(by.chromosome$III)
+by.chromosome$IV  <- as.numeric(by.chromosome$IV)
+by.chromosome$V   <- as.numeric(by.chromosome$V)
+by.chromosome$X   <- as.numeric(by.chromosome$X)
+
+
+#calculate Ne per chromosome based on Jonas et al 2016
+by.chromosome = matrix(nrow = 24, ncol = 7);
+for (i in 1:24){
+  name <- c("A_1_LA", "A_2_LA", "A_3_LA", "B_1_LA", "B_2_LA", "B_3_LA", "A_1_SO", "A_2_SO", "A_3_SO", "B_1_SO", "B_2_SO", "B_3_SO", "A_1_CO", "A_2_CO", "A_3_CO", "B_1_CO", 
+            "B_2_CO", "B_3_CO", "A_1_SC", "A_2_SC", "A_3_SC", "B_1_SC", "B_2_SC", "B_3_SC")
+  
+  A <- subset(commonSNP, line == name[i] & REF != 0 & ALT !=0 & time==31 & CHR != "MtDNA", select = c("SNP", "REF", "ALT", "coverage"))
+  names(A) <- c("SNP", "evo.ref", "evo.alt", "evo.coverage")
+  
+  B <- merge(anc, A, by.x = "SNP", by.y = "SNP")
+  
+  for (j in 1:6){
+    p0 <- subset(B, CHR == j)$anc.ref / (subset(B, CHR == j)$anc.ref + subset(B, CHR == j)$anc.alt)
+    pt <- subset(B, CHR == j)$evo.ref / (subset(B, CHR == j)$evo.ref + subset(B, CHR == j)$evo.alt)
+    
+    cov0 <- subset(B, CHR == j)$anc.coverage
+    covt <- subset(B, CHR == j)$evo.coverage
+    
+    Ne <- estimateNe(p0 = p0, pt = pt, cov0 = cov0, covt = covt, t = 30, ploidy = 2, truncAF = NA, method = c("P.planII"), Ncensus = 5000, poolSize = rep(2500, 2))
+    Ne <- as.matrix(Ne)
+    by.chromosome[i, j+1] <- Ne[1]
   }
  
   by.chromosome[i, 1] <- name[i]
@@ -152,5 +183,5 @@ t.test(by.chromosome[, 7], by.chromosome[, 2:6], alternative = "two.sided")
 #What is the upper bound on Ne assuming unequal sex ratio, such that all females mate but not all males?
 Nm <- function(Ne, Nf) {(Nf * Ne) / (4 * Nf - Ne)}
 #let Nf = 2500
-#let Ne range from 16.3-23.5% of 5000 (815-1175)
+#let Ne range from 8.9-15.7% of 5000 (445-785)
 
